@@ -1,0 +1,26 @@
+'use strict';
+const { contextBridge, ipcRenderer } = require('electron');
+const invoke = (channel, ...args) => ipcRenderer.invoke(`overlay:${channel}`, ...args);
+contextBridge.exposeInMainWorld('overlay', {
+  state: () => invoke('state'),
+  ask: question => invoke('ask', question),
+  cancel: () => invoke('cancel'),
+  upload: () => invoke('upload'),
+  pasteImage: () => invoke('paste-image'),
+  importImage: image => invoke('import-image', image),
+  capture: displayId => invoke('capture', displayId),
+  releaseImage: id => invoke('release-image', id),
+  saveSettings: settings => invoke('save-settings', settings),
+  clear: () => invoke('clear'),
+  export: () => invoke('export'),
+  hide: () => invoke('hide'),
+  passThrough: () => invoke('pass-through'),
+  compact: () => invoke('compact'),
+  copy: text => invoke('copy', text),
+  quit: () => invoke('quit'),
+  onEvent: callback => {
+    const listener = (_event, value) => callback(value);
+    ipcRenderer.on('overlay:event', listener);
+    return () => ipcRenderer.removeListener('overlay:event', listener);
+  }
+});

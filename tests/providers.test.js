@@ -1,0 +1,75 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { buildRequest, parseSSE, streamAnswer, validateApiKey } = require('../overlay/providers');
+const encoder = new TextEncoder();
+const frame = data => `data: ${JSON.stringify(data)}\r\n\r\n`;
+function response(text, chunkSize = 7) { return new Response(new ReadableStream({ start(controller) { const bytes = encoder.encode(text); for (let i=0;i<bytes.length;i+=chunkSize) controller.enqueue(bytes.slice(i,i+chunkSize)); controller.close(); } }), { status:200 }); }
+const anthropicStream = text => frame({ type:'content_block_delta',delta:{type:'text_delta',text} }) + frame({type:'message_delta',delta:{stop_reason:'end_turn'}}) + frame({type:'message_stop'});
+const options = { provider:'anthropic', model:'claude-sonnet-5-5', apiKey:'test-key-not-real', messages:[{role:'user',text:'test'}], retryDelayMs:1 };
+
+test('key verification authenticates both providers without generation or URL secrets', async () => {
+  for (const provider of ['gemini','anthropic']) {
+    let canceled = false;
+    const result = await validateApiKey(provider, 'private-test-key', { fetchImpl: async (url, input) => {
+      assert.match(url, /\/models\?/); assert.ok(!url.includes('private-test-key'));
+      assert.equal(input.method, 'GET'); assert.equal(input.body, undefined); assert.equal(input.redirect, 'error');
+      assert.equal(input.headers[provider === 'gemini' ? 'x-goog-api-key' : 'x-api-key'], 'private-test-key');
+      return { status: 200, body: { cancel: async () => { canceled = true; } } };
+    } });
+    assert.equal(result, true); assert.equal(canceled, true);
+  }
+});
+test('rejected, unavailable and timed out key checks return safe errors', async () => {
+  for (const status of [400,401,403,404,429,503]) {
+    await assert.rejects(validateApiKey('gemini','private-test-key', { fetchImpl: async () => new Response('private-test-key', {status}) }), error => {
+      assert.match(error.message, /saved key has not changed/); assert.ok(!error.message.includes('private-test-key')); return true;
+    });
+  }
+  await assert.rejects(validateApiKey('anthropic','private-test-key', { fetchImpl: async () => { throw new TypeError('network error with private-test-key'); } }), /Could not connect to verify/);
+  await assert.rejects(validateApiKey('gemini','private-test-key', { timeoutMs: 15, fetchImpl: async (_url,{signal}) => new Promise((_resolve,reject) => signal.addEventListener('abort', () => reject(signal.reason), {once:true})) }), /verification timed out/);
+});
+
+test('provider adapters keep keys in headers and send images in native formats', () => {
+  const messages = [{role:'user', text:'solve', image:{mime:'image/jpeg',data:'pixels'}}, {role:'assistant',text:'answer'}];
+  const claude = buildRequest('anthropic','claude-test','secret',messages);
+  assert.equal(claude.body.messages[0].content[0].source.media_type,'image/jpeg'); assert.equal(claude.headers['x-api-key'],'secret'); assert.ok(!claude.url.includes('secret'));
+  const gemini = buildRequest('gemini','gemini-test','secret',messages);
+  assert.equal(gemini.body.contents[1].role,'model'); assert.equal(gemini.body.contents[0].parts[0].inlineData.data,'pixels'); assert.ok(!gemini.url.includes('secret'));
+});
+test('SSE handles fragmented CRLF, unicode and comments', async () => {
+  const text = ': ping\r\n\r\n' + frame({text:'हेलो 🌿'});
+  const result = []; for await (const event of parseSSE(response(text,1).body)) result.push(event);
+  assert.deepEqual(result,[{text:'हेलो 🌿'}]);
+});
+test('Claude streams only answer text and requires a completion event', async () => {
+  const deltas = [];
+  const result = await streamAnswer({...options, fetchImpl:async()=>response(frame({type:'content_block_delta',delta:{type:'thinking_delta',thinking:'private'}})+anthropicStream('Hello')), onDelta:delta=>deltas.push(delta)});
+  assert.equal(result.text,'Hello'); assert.deepEqual(deltas,['Hello']);
+  await assert.rejects(streamAnswer({...options,fetchImpl:async()=>response(frame({type:'content_block_delta',delta:{type:'text_delta',text:'Partial'}}))}), /before the answer completed/);
+});
+test('Gemini filters reasoning, detects blocked output and marks truncation', async () => {
+  const result = await streamAnswer({...options,provider:'gemini',fetchImpl:async()=>response(frame({candidates:[{content:{parts:[{text:'internal',thought:true},{text:'42'}]},finishReason:'MAX_TOKENS'}]}))});
+  assert.deepEqual(result,{text:'42',truncated:true});
+  await assert.rejects(streamAnswer({...options,provider:'gemini',fetchImpl:async()=>response(frame({promptFeedback:{blockReason:'SAFETY'}}))}),/declined/);
+});
+test('retries transient failures only before output; authentication never retries', async () => {
+  let attempts = 0;
+  const result = await streamAnswer({...options,fetchImpl:async()=>++attempts===1?new Response('',{status:503}):response(anthropicStream('Recovered'))});
+  assert.equal(attempts,2); assert.equal(result.text,'Recovered');
+  attempts=0; await assert.rejects(streamAnswer({...options,fetchImpl:async()=>{attempts++;return new Response('',{status:401});}}),/key was rejected/); assert.equal(attempts,1);
+  attempts=0; await assert.rejects(streamAnswer({...options,fetchImpl:async()=>{attempts++;return response(frame({type:'content_block_delta',delta:{type:'text_delta',text:'partial'}})+frame({type:'error',error:{type:'overloaded_error'}}));}}),/interrupted/); assert.equal(attempts,1);
+});
+test('retry budget is bounded and cancellation stops a pending network request', async () => {
+  let attempts=0; await assert.rejects(streamAnswer({...options,fetchImpl:async()=>{attempts++;throw new TypeError('network');}}),/internet/); assert.equal(attempts,3);
+  const controller = new AbortController();
+  const promise = streamAnswer({...options,signal:controller.signal,fetchImpl:async(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}))});
+  controller.abort(); await assert.rejects(promise,/Answer stopped/);
+});
+test('total deadline includes stalled network requests', async () => {
+  await assert.rejects(streamAnswer({...options,timeoutMs:15,fetchImpl:async(_url,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(signal.reason),{once:true}))}), /timed out/);
+});
+test('malformed or unfinished SSE does not become a successful answer', async () => {
+  await assert.rejects(streamAnswer({...options,fetchImpl:async()=>response('data: invalid\n\n')}), /invalid streaming/);
+  await assert.rejects(streamAnswer({...options,fetchImpl:async()=>response('data: {"partial":')}), /during a streaming event/);
+});

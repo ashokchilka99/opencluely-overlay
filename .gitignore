@@ -1,5 +1,12 @@
 node_modules/
 .env
+.env.*
+!.env.example
+*.enc
+credentials*.json
+preferences.json
+.test-output/
+work/
 .venv-whisper/
 .whisper-models/
 eng.traineddata
