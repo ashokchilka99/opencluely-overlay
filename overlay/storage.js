@@ -14,7 +14,7 @@ class Store {
     const file = path.join(this.directory, name);
     if (!fs.existsSync(file)) return fallback;
     try {
-      if (fs.statSync(file).size > 4 * 1024 * 1024) throw new Error('Oversized settings file');
+      if (fs.statSync(file).size > (name === 'chats.enc' ? 8 : 4) * 1024 * 1024) throw new Error('Oversized settings file');
       const data = fs.readFileSync(file);
       return JSON.parse(encrypted ? this.crypto.decryptString(data) : data.toString('utf8'));
     } catch {
@@ -25,8 +25,12 @@ class Store {
   write(name, value, encrypted = false) {
     if (encrypted && !this.available()) throw new Error('Secure storage is unavailable. Keys and history cannot be saved on this device.');
     const text = JSON.stringify(value);
+    const bytes = encrypted ? this.crypto.encryptString(text) : Buffer.from(text, 'utf8');
+    if (bytes.length > (name === 'chats.enc' ? 8 : 4) * 1024 * 1024) {
+      throw new Error('Saved data is too large. Export and remove older chats before saving more.');
+    }
     const target = path.join(this.directory, name), temporary = `${target}.tmp`;
-    fs.writeFileSync(temporary, encrypted ? this.crypto.encryptString(text) : text, { mode: 0o600 });
+    fs.writeFileSync(temporary, bytes, { mode: 0o600 });
     fs.renameSync(temporary, target);
   }
   remove(name) { fs.rmSync(path.join(this.directory, name), { force: true }); }

@@ -1,5 +1,7 @@
 # OpenCluely Overlay 2.1 — verification
 
+**Historical report for version 2.1.0.** These results do not validate the Windows 2.3 port, its OpenAI integration, conversation archives, quit guard, or native recovery helper. Current port status is recorded in [WINDOWS-PORT.md](WINDOWS-PORT.md).
+
 Built, installed and checked on Windows 11 x64 on 14 October 2026.
 
 ## Results

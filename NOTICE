@@ -1,9 +1,12 @@
-OpenCluely Overlay 2.1
+OpenCluely Overlay 2.3 for Windows
 Based on arth-agrawal/OpenCluely and the original TechyCSR/OpenCluely.
+The Windows 2.3 port incorporates the text/image, provider/model, conversation,
+and close-protection updates from ashokchilka99/mac-godsplan, reference commit
+f2b35228b67e0b22816ce779bc41c7503f24665d.
 The Apache-2.0 LICENSE is retained in this repository. The original source
 remains available from the upstream repositories and this repository's Git history.
 
-This version replaces the desktop entry point with a focused text/image overlay,
-new lifecycle management, provider transport, secure storage and interface.
+This version uses the focused text/image overlay, native Windows lifecycle and
+capture controls, encrypted storage, and a per-user Windows recovery helper.
 The earlier voice, interview-specific and stealth interfaces are available in
 Git history for reference and are not included in the new desktop distribution.

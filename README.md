@@ -1,18 +1,21 @@
-# OpenCluely Overlay 2.1
+# OpenCluely Overlay 2.3 for Windows
 
-Windows desktop assistant for text and image questions using Claude or Gemini.
+Windows desktop assistant for text and image questions using **OpenAI / ChatGPT, Claude, or Gemini**, adapted from the updated [Mac version](https://github.com/ashokchilka99/mac-godsplan).
 
-- Always-on-top overlay with tray controls, click-through, and global shortcuts.
+- Always-on-top overlay with tray controls, click-through, compact view, and global shortcuts.
 - Text questions, image upload/paste/drop, screenshots, and streamed answers.
-- Separate Claude and Gemini keys, verified before saving with Windows encryption.
-- Screen-capture protection enabled by default; check your meeting client's preview.
-- Optional startup after Windows sign-in and encrypted conversation restoration.
+- Provider-specific model presets and custom model IDs.
+- Separate provider keys, checked before saving with Windows encryption.
+- New chat and encrypted conversation archives that can be reopened or deleted.
+- Capture exclusion and protection against normal Quit requests, enabled by default.
+- An owner-controlled Windows helper that reopens the installed app after an unexpected exit.
+- Optional launch after Windows sign-in, separate from automatic reopening.
 
-Download the Windows installer from [Releases](https://github.com/ashokchilka99/opencluely-overlay/releases/latest). It is an unsigned development build.
+Download an available Windows installer from [Releases](https://github.com/ashokchilka99/opencluely-overlay/releases). These are unsigned development builds. Version 2.3 source produces `OpenCluely-Overlay-Setup-2.3.0.exe`; see the [Windows port status](docs/WINDOWS-PORT.md) for its current validation and publication status.
 
-See [setup, privacy and development documentation](README-OVERLAY.md), [Windows startup](docs/STARTUP.md), and [verification results](docs/VERIFICATION.md).
+See [setup, controls, privacy and development](README-OVERLAY.md), [automatic reopening and emergency stop](docs/AUTOMATIC-REOPENING.md), and [startup and shortcuts](docs/STARTUP.md).
 
-The installed app starts in the tray after Windows sign-in. Ctrl+Alt+Space shows or hides it. Source development requires running `npm ci` first.
+**Ctrl+Alt+Space** shows or hides the running overlay. Closing the window hides it to the tray. Confirm **Quit OpenCluely** in Settings or the tray to stop both the overlay and automatic reopening. Windows shutdown and sign-out remain available. Windows can force terminate the app or helper; recovery does not make it immune to termination.
 
 For source development, use Node.js 22.12 or newer:
 
@@ -21,9 +24,10 @@ npm ci
 npm start
 npm test
 npm run test:desktop
+npm run test:recovery
 npm run build:win
 ```
 
-Desktop checks require an interactive Windows session. Test outputs stay in the ignored `.test-output/` directory. API keys, local conversations, dependencies, and generated builds are excluded from Git.
+The build compiles the small C# recovery helper with the Windows .NET Framework compiler before packaging. Desktop checks require an interactive Windows session. Test outputs stay in the ignored `.test-output/` directory. Keys, local conversations, dependencies, and generated builds are excluded from Git.
 
-Based on [arth-agrawal/OpenCluely](https://github.com/arth-agrawal/OpenCluely) and [TechyCSR/OpenCluely](https://github.com/TechyCSR/OpenCluely). The original implementation remains available in Git history. Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Based on [arth-agrawal/OpenCluely](https://github.com/arth-agrawal/OpenCluely), [TechyCSR/OpenCluely](https://github.com/TechyCSR/OpenCluely), and [ashokchilka99/mac-godsplan](https://github.com/ashokchilka99/mac-godsplan). The original implementation remains available in Git history. Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).

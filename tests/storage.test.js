@@ -20,3 +20,14 @@ test('corrupt data is preserved and reported; encryption never falls back to pla
   assert.equal(notices.length,1); assert.equal(fs.readFileSync(path.join(directory,'preferences.json'),'utf8'),'broken');
   assert.throws(()=>store.write('credentials.enc',{key:'secret'},true),/Secure storage/); assert.ok(!fs.existsSync(path.join(directory,'credentials.enc')));
 });
+
+test('oversized writes preserve saved data and archives remain readable above the legacy limit', t => {
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'opencluely-store-test-')); t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const crypto={isEncryptionAvailable:()=>true,encryptString:text=>Buffer.from(text),decryptString:bytes=>bytes.toString()};
+  const store=new Store(directory,crypto);
+  store.write('conversation.enc',['existing conversation'],true);
+  assert.throws(()=>store.write('conversation.enc',['x'.repeat(4*1024*1024)],true),/too large/);
+  assert.deepEqual(store.read('conversation.enc',[],true),['existing conversation']);
+  const archive={current:[],archive:['x'.repeat(4*1024*1024)]};
+  store.write('chats.enc',archive,true); assert.deepEqual(store.read('chats.enc',null,true),archive);
+});
